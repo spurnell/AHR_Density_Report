@@ -1,0 +1,511 @@
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+```
+
+
+
+```{r message=FALSE, warning=FALSE}
+library(ggplot2)
+library(formattable)
+library(ggrepel)
+library(corrplot)
+library(Hmisc)
+library(tidyverse)
+library(googlesheets4)
+library(rlang)
+library(ggplot2)
+library(data.table)
+library(DT)
+library(knitr)
+library(kableExtra)
+library(ggrepel)
+library(plotly)
+
+```
+
+## Why are some states doing so poorly on the AHR? 
+This analysis seeks to explore the relationship between the finance score and the costs associated with transportation construction and maintenance in urban vs rural states 
+
+```{r}
+#loading data 
+historical_data <- read.csv("C:/Users/SPENC/Downloads/R_Feeder_ MAIN_Historical - Main Database (1).csv", na.strings = c(""," ", "NA"))
+
+historical_data <- historical_data %>% 
+  filter(!Year == 2017) %>% 
+  filter(!Year == 2010)
+
+historical_data <- historical_data[,c(1:2, 5:9)]
+
+historical_data <- as.data.frame(lapply(historical_data, function(y) gsub(",", "", y)))
+
+historical_data <- rename(historical_data, State = . )
+
+historical_data[2:7] <- as.numeric(unlist(historical_data[2:7]))
+
+per_miles <- function(x) {
+  x/historical_data$State.Controlled.Lane.Miles
+  
+}
+  
+state_controlled_LM <- historical_data %>% 
+  mutate(across(c(4,5,6,7), per_miles))
+
+state_controlled_LM <- state_controlled_LM[4:7]
+
+state_controlled_LM <- state_controlled_LM %>% 
+  rename( Capital.Disbursements.Per.LM = Capital.Disbursements,
+          Maintenence.Disbursements.Per.LM = Maintenence.Disbursements,
+          Administrative.Disbursements.Per.LM = Administrative.Disbursements,
+          Total.Disbursements.Per.LM = Total.Disbursements
+          )
+
+historical_data <- cbind(historical_data, state_controlled_LM)
+
+```
+
+
+## Sum of Spending in All States
+```{r}
+#Calculating spending sums by year
+raw_spending_by_year <- function(.data) {
+  
+  .data %>% 
+    dplyr::group_by(Year) %>% 
+    dplyr::summarize(Total_Spending = (sum(Total.Disbursements)),
+                     Admin_Spending = sum(Administrative.Disbursements),
+                     Maint_Spending = sum(Maintenence.Disbursements),
+                     Capital_Spending = sum(Capital.Disbursements)) %>% 
+    mutate(Total_Spending = formattable::currency(Total_Spending))  %>% 
+    mutate(Admin_Spending = formattable::currency(Admin_Spending)) %>% 
+    mutate(Maint_Spending = formattable::currency(Maint_Spending)) %>% 
+    mutate(Capital_Spending = formattable::currency(Capital_Spending))
+             
+  
+}
+              
+Spending_by_year <- historical_data %>% 
+  raw_spending_by_year()
+
+
+#plotting spending
+ggplot2::ggplot(data = Spending_by_year, aes(Year)) +
+  geom_line(aes( y = Total_Spending, colour = "Total")) +
+  ylab("Total Spending") +
+  scale_y_continuous(labels = comma)
+    
+
+ggplot2::ggplot(data = Spending_by_year, aes(Year)) +
+  geom_line(aes(y = Admin_Spending, colour = "Admin")) +
+  geom_line(aes(y = Maint_Spending, colour = "Maint")) +
+  geom_line(aes(y = Capital_Spending, colour = "Capital")) +
+  ggplot2::ylab("Other Spending") +
+  scale_y_continuous(labels = comma)
+
+  
+
+
+#percentage Increases
+percent_increase <- function(x) {
+  
+  Total_percent_Increase <- (((Spending_by_year[13,x]) - (Spending_by_year[1,x])) / Spending_by_year[1,x]) 
+  
+  Total_percent_Increase <- formattable::percent(Total_percent_Increase)
+  
+}
+
+Total_increase <- percent_increase(2)
+Admin_increase <- percent_increase(3)
+Maint_increase <- percent_increase(4)
+Capit_increase <- percent_increase(5)
+
+Increases <- cbind(Total_increase, Admin_increase, Maint_increase, Capit_increase)
+
+Increases <- formattable::percent(Increases)
+
+#Tables for total sum spending
+kableExtra::kbl(Spending_by_year) %>% 
+  kable_styling()
+
+print(Increases)
+
+#calculating per mile averages 
+
+permile_avg_by_year <- function(.data) {
+  
+  .data %>% 
+    dplyr::group_by(Year) %>% 
+    dplyr::summarize(Mean_Total_Spending = mean(Total.Disbursements.Per.LM),
+                     Mean_Admin_Spending = mean(Administrative.Disbursements.Per.LM),
+                     Mean_Maint_Spending = mean(Maintenence.Disbursements.Per.LM),
+                     Mean_Capital_Spending = mean(Capital.Disbursements.Per.LM))
+  
+}
+
+Spending_permile_avg <- historical_data %>% 
+  permile_avg_by_year()
+
+
+
+#Table for Spending per Lane Mile
+kableExtra::kbl(Spending_permile_avg, caption = "Spending (in Millions) per Lane Mile") %>% 
+  kable_styling()
+
+#plotting per mile 
+ggplot2::ggplot(data = Spending_permile_avg, aes(Year)) +
+  geom_line(aes(y = Mean_Total_Spending, colour = "Total")) +
+  geom_line(aes(y =  Mean_Admin_Spending, colour = "Admin")) +
+  geom_line(aes(y =  Mean_Maint_Spending, colour = "Maint")) +
+  geom_line(aes(y = Mean_Maint_Spending, colour = "Capital")) +
+  ylab("Mean Spending per Mile (In Millions)")
+
+
+
+#calculating variance of disbursements per lane mile 
+variance_by_year <- function(.data) {
+  
+  .data %>% 
+    dplyr::group_by(Year) %>% 
+    dplyr::summarize(Total_Variance = var(Total.Disbursements.Per.LM),
+                     Admin_Variance = var(Administrative.Disbursements.Per.LM),
+                     Maint_Variance = var(Maintenence.Disbursements.Per.LM),
+                     Capit_Variance = var(Capital.Disbursements.Per.LM))
+  
+}
+
+yearly_variance <- historical_data %>% 
+  variance_by_year() 
+
+kableExtra::kbl(yearly_variance) %>% 
+  kable_styling()
+
+
+#plotting variance of disbursements per lane miles
+ggplot(data = yearly_variance, aes(Year)) +
+  geom_line(aes(y = Total_Variance, colour = "Total")) 
+
+
+ggplot(data = yearly_variance, aes(Year)) +
+  geom_line(aes(y = Admin_Variance, colour = "Admin")) +
+  geom_line(aes(y = Maint_Variance, colour = "Maint")) +
+  geom_line(aes(y = Capit_Variance, colour = "Capital"))
+
+
+
+
+#calculating per mile maxes
+max_by_year <- function(.data) {
+  
+  .data %>% 
+    dplyr::group_by(Year) %>% 
+    dplyr::summarize(Total_Max = max(Total.Disbursements.Per.LM),
+                     Admin_Max = max(Administrative.Disbursements.Per.LM),
+                     Maint_Max= max(Maintenence.Disbursements.Per.LM),
+                     Capit_Max = max(Capital.Disbursements.Per.LM))
+  
+}
+
+yearly_max <- historical_data %>% 
+  max_by_year()
+
+#plotting per mile maxes 
+ggplot(yearly_max, aes(Year)) +
+  geom_line(aes( y = Total_Max, colour = "Total"))
+
+ggplot(yearly_max, aes(Year)) + 
+  geom_line(aes(y = Admin_Max, colour = "Admin")) +
+  geom_line(aes(y = Maint_Max, colour = "Maint")) +
+  geom_line(aes(y = Capit_Max, colour = "Capital"))
+
+
+
+#Calculating Finance Scores 
+get_scores <- function(.data, sum_col, old_col, new_col) {
+  
+  old_col <- enquo(old_col)
+  new_col <- enquo(new_col)
+  new_col_name <- quo_name(new_col)
+  sum_col <- enquo(sum_col)
+  
+  
+historical_data <- historical_data %>% 
+  group_by(Year) %>% 
+  mutate(!!new_col_name := !!old_col/
+           (sum(!!sum_col) / sum(State.Controlled.Lane.Miles)))
+
+}
+
+historical_data <- historical_data %>% 
+  get_scores(Capital.Disbursements, Capital.Disbursements.Per.LM, Capital.Score)
+
+historical_data <- historical_data %>% 
+  get_scores(Maintenence.Disbursements, Maintenence.Disbursements.Per.LM, Maintenence.Score) 
+
+historical_data <-  historical_data %>% 
+  get_scores(Administrative.Disbursements, Administrative.Disbursements.Per.LM, Administrative.Score)
+
+historical_data <- historical_data %>% 
+  get_scores(Total.Disbursements, Total.Disbursements.Per.LM, Total.Score)
+
+historical_data <- historical_data %>% 
+  rowwise() %>% 
+  ungroup() %>% 
+  mutate(Finance_Score = Capital.Score +
+                          Maintenence.Score +
+                          Administrative.Score +
+                          Total.Score)
+
+
+historical_data$Finance_Score <- historical_data$Finance_Score/4
+
+
+#Calculating Finance Score Variance 
+Finance_variance_by_year <- function(.data) {
+  
+  .data %>% 
+    dplyr::group_by(Year) %>% 
+    dplyr::summarize(Total_Variance = var(Total.Score),
+                     Admin_Variance = var(Administrative.Score),
+                     Maint_Variance = var(Maintenence.Score),
+                     Capit_Variance = var(Capital.Score))
+  
+}
+
+Finance_Score_Variance <- historical_data %>% 
+  Finance_variance_by_year()
+
+
+
+print(Finance_Score_Variance)
+
+#plotting finance score variance 
+ggplot2::ggplot(data = Finance_Score_Variance, aes(Year)) +
+  geom_line(aes( y = Total_Variance, colour = "Total")) +
+  geom_line(aes(y = Admin_Variance, colour = "Admin")) +
+  geom_line(aes(y = Maint_Variance, colour = "Maint")) +
+  geom_line(aes(y = Capit_Variance, colour = "Capital"))
+  
+  
+
+#calculating finance maxes
+Finace_Max_by_Year <- function(.data) {
+  
+  .data %>% 
+    dplyr::group_by(Year) %>% 
+    summarize(Total_max = max(Total.Score),
+              Admin_max = max(Administrative.Score),
+              Maint_max = max(Maintenence.Score),
+              Capit_max = max(Capital.Score))
+  
+}
+
+
+Finance_Maxes <- historical_data %>% 
+  Finace_Max_by_Year()
+  
+#plotting finance maxes 
+ggplot2::ggplot(Finance_Maxes, aes(Year)) +
+  geom_line(aes( y = Total_max, colour = "Total")) +
+  geom_line(aes(y = Admin_max, colour = "Admin")) +
+  geom_line(aes(y = Maint_max, colour = "Maint")) +
+  geom_line(aes(y = Capit_max, colour = "Capital"))
+  
+
+```
+
+
+## Greater Variance In Finance Scores than Performance Scores
+
+New Jersey has by far the worst Finance Score, almost double
+
+```{r}
+Full_Data <- read.csv("C:/Users/SPENC/Downloads/Cost of doing business - Full Data (2).csv")
+
+variance <- Full_Data[, c(1,13,15)]
+
+print(variance[order(variance[,2], decreasing = T),  ])
+
+```
+
+Finance STDV, Variance
+
+```{r}
+
+finance_score_dev <- sd(variance[,2])
+
+print(finance_score_dev)
+
+finance_score_var <- var(variance[,2])
+
+print(finance_score_var)
+
+
+```
+Performance STDV, Variance
+
+```{r}
+perforance_score_dev <- sd(variance[,3])
+
+print(perforance_score_dev)
+
+perforance_score_var <- var(variance[,3])
+
+print(perforance_score_var)
+
+```
+
+
+
+## Tax, Finance, and Performance Ranking Matrix
+
+Shows the correlations between all rankings  Notice that Finance Rank correlates with both cost of living and doing business but nothing else. Neither is correlated with performance rank either.  
+
+```{r pressure, echo=FALSE}
+
+matrix_plot <- read.csv("C:/Users/SPENC/Downloads/Cost of doing business - matrix.csv", check.names = FALSE)
+
+matrix_plot <- as.data.frame(matrix_plot)
+
+matrix_plot2 <- matrix_plot[,c(1:4,19,28)]
+
+res <- cor(matrix_plot2)
+
+corrplot(res)
+```
+
+## Multiple Regression Analysis
+
+Explores statistical relationships between Finance, Performance, and Localized Costs Ranks
+
+Here's the CNBC Definitions:
+
+  - **Cost of Doing Business:**  We measure the strength of each state’s business tax climate, as well as tax burdens for various types of businesses and facilities. We also measure wage and utility costs, as well as the cost of office and industrial space. And we consider incentives and tax breaks that states offer to reduce business costs, with special emphasis on incentives targeted toward development in disadvantaged communities.
+  
+  - **Education:**  We consider the number of higher education institutions in each state as well as long-term trends in state support for higher education. We also consider historically Black colleges and universities (HBCUs), which companies are increasingly seeking to partner with. We look at multiple measures of K-12 education including test scores, class size and spending. We also look at life-long learning opportunities in each state.
+  
+  - **Workforce:** We measure the educational attainment of each state’s working-age population, as well as which states are attracting college-educated workers and which states are losing them. With skilled workers in particular demand, we consider each state’s concentration of science, technology, engineering and math (STEM) workers. We measure worker productivity based on economic output per job. We look at union membership and right to work laws. And we measure the availability of workers, as well as the diversity of each state’s workforce.
+  
+  - **Cost of Living:** The cost of living helps drive the cost of doing business. From housing to food and energy, wages go further when the cost of living is low. We measure the states based on an index of costs for basic items.
+
+## Overall Rank
+
+```{r, anlysis}
+
+cost_exploration <- read.csv("C:/Users/SPENC/Downloads/Cost of doing business - Full Data (1).csv")
+
+cost_exploration <- as.data.frame(cost_exploration)
+
+linear_model <- with(cost_exploration, lm(Overall.Rank ~ EDUCATION +
+                                                          WORKFORCE +
+                                                          Cost.of.Doing.Business +
+                                                          Cost.of.Living))
+
+
+
+
+summary(linear_model)
+
+
+
+
+
+```
+
+## Finance Rank 
+
+```{r}
+
+linear_model2 <- with(cost_exploration, lm(Finance.Rank ~ EDUCATION +
+                                                          WORKFORCE +
+                                                          Cost.of.Doing.Business +
+                                                          Cost.of.Living))
+summary(linear_model2)
+
+```
+
+## RPP + Overall Score 
+
+```{r}
+
+linear_model3 <- with(cost_exploration, lm(Overall.Score ~ RPP ))
+
+summary(linear_model3)
+
+plot(cost_exploration$Overall.Score, cost_exploration$RPP)
+
+
+```
+
+##  ******* Finance Score + RPP ************
+
+```{r}
+
+linear_model4 <- with(cost_exploration, lm(Finance.Score ~ RPP))
+
+summary(linear_model4)
+
+plot(cost_exploration$Finance.Score, cost_exploration$RPP)
+
+```
+
+
+# Finance Score + Performance + RPP
+
+```{r}
+
+linear_model5 <- with(cost_exploration, lm(Finance.Score ~ Performance.Score + RPP))
+
+summary(linear_model5)
+
+```
+
+## Cost of Living vs Tax Burden 
+
+```{r, warning=F}
+cost_of_living <- read.csv("C:/Users/SPENC/Downloads/advisorsmith_cost_of_living_index - advisorsmith_cost_of_living_index.csv")
+
+cost_of_living <- cost_of_living %>% 
+  filter(!State == "DC")
+
+cost_of_living$State <- state.name[match(cost_of_living$State, state.abb)]
+
+cost_of_living <- cost_of_living %>% 
+  group_by(State) %>% 
+  summarise(avg_cost_of_living = round(mean(Cost.of.Living.Index), 2))
+
+
+Full_Data_smithadv <- merge(Full_Data, cost_of_living, by = "State")
+
+ggplot(Full_Data_smithadv, aes(x=Urbanization, y =avg_cost_of_living)) +
+  geom_point() +
+  ggrepel::geom_text_repel(
+    label = Full_Data_smithadv$State
+  ) 
+
+state_names <- Full_Data_smithadv$State
+  
+fig <- plotly::plot_ly(Full_Data_smithadv, 
+                       x=~Urbanization, y =~avg_cost_of_living,
+                       mode = 'text',
+                       text = ~Full_Data_smithadv$State)
+
+fig
+
+
+fig2 <- plotly::plot_ly(Full_Data_smithadv, 
+                       x=~Urbanization, y =~Finance.Score,
+                       mode = 'text',
+                       text = ~Full_Data_smithadv$State)
+
+fig2
+
+
+```
+
+
+
+## Results
+ 
+The above results show that when controlling for differences in Workforce and Education, the cost of doing business has a significant impact on the Overall Score, which is the best indicator 
