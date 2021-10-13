@@ -24,14 +24,31 @@ library(kableExtra)
 library(ggrepel)
 library(plotly)
 
+#Here are the links to data sources, in order as they appear in the "Cost of Doing Business - Full Data" database. Apologies for the disorganizaton, I've just been putting this together on the fly
+
+#Urbanization (Column 2) - https://fivethirtyeight.com/features/how-urban-or-rural-is-your-state-and-what-does-that-mean-for-the-2020-election/
+
+#Tax Burden (Columns 3- 6) - https://wallethub.com/edu/states-with-highest-lowest-tax-burden/20494
+
+#Tax Ranking by State (Columns 7 - 12) - https://taxfoundation.org/2021-state-business-tax-climate-index/
+
+#Columns 13-32 are the Highway Report Data 
+
+#CNBC (Columns 33 - 42) - https://www.cnbc.com/2021/07/13/americas-top-states-for-business.html
+
+#RPP (Column 43 )- https://apps.bea.gov/iTable/iTable.cfm?reqid=70&step=1&acrdn=8
+
+
+
 ```
 
 ## Why are some states doing so poorly on the AHR? 
 This analysis seeks to explore the relationship between the finance score and the costs associated with transportation construction and maintenance in urban vs rural states 
 
 ```{r}
-#loading data 
-historical_data <- read.csv("C:/Users/SPENC/Downloads/R_Feeder_ MAIN_Historical - Main Database (1).csv", na.strings = c(""," ", "NA"))
+
+historical_data <- readr::read_csv("https://raw.githubusercontent.com/spurnell/AHR_Density_Report/main/R_Feeder_%20MAIN_Historical%20-%20Main%20Database.csv")
+
 
 historical_data <- historical_data %>% 
   filter(!Year == 2017) %>% 
@@ -321,7 +338,7 @@ ggplot2::ggplot(Finance_Maxes, aes(Year)) +
 New Jersey has by far the worst Finance Score, almost double
 
 ```{r}
-Full_Data <- read.csv("C:/Users/SPENC/Downloads/Cost of doing business - Full Data (2).csv")
+Full_Data <- readr::read_csv("https://raw.githubusercontent.com/spurnell/AHR_Density_Report/main/Cost%20of%20doing%20business%20-%20Full%20Data.csv")
 
 variance <- Full_Data[, c(1,13,15)]
 
@@ -364,7 +381,7 @@ Shows the correlations between all rankings  Notice that Finance Rank correlates
 
 ```{r pressure, echo=FALSE}
 
-matrix_plot <- read.csv("C:/Users/SPENC/Downloads/Cost of doing business - matrix.csv", check.names = FALSE)
+matrix_plot <- readr::read_csv("https://raw.githubusercontent.com/spurnell/AHR_Density_Report/main/Cost%20of%20doing%20business%20-%20matrix.csv")
 
 matrix_plot <- as.data.frame(matrix_plot)
 
@@ -393,7 +410,7 @@ Here's the CNBC Definitions:
 
 ```{r, anlysis}
 
-cost_exploration <- read.csv("C:/Users/SPENC/Downloads/Cost of doing business - Full Data (1).csv")
+cost_exploration <- readr::read_csv("https://raw.githubusercontent.com/spurnell/AHR_Density_Report/main/Cost%20of%20doing%20business%20-%20Full%20Data.csv")
 
 cost_exploration <- as.data.frame(cost_exploration)
 
@@ -464,7 +481,7 @@ summary(linear_model5)
 ## Cost of Living vs Tax Burden 
 
 ```{r, warning=F}
-cost_of_living <- read.csv("C:/Users/SPENC/Downloads/advisorsmith_cost_of_living_index - advisorsmith_cost_of_living_index.csv")
+cost_of_living <- readr::read_csv("https://raw.githubusercontent.com/spurnell/AHR_Density_Report/main/Cost%20of%20doing%20business%20-%20Full%20Data.csv")
 
 cost_of_living <- cost_of_living %>% 
   filter(!State == "DC")
@@ -503,6 +520,7 @@ fig2
 
 
 ```
+
 
 
 
