@@ -340,6 +340,8 @@ New Jersey has by far the worst Finance Score, almost double
 ```{r}
 Full_Data <- readr::read_csv("https://raw.githubusercontent.com/spurnell/AHR_Density_Report/main/Cost%20of%20doing%20business%20-%20Full%20Data.csv")
 
+Full_Data <- as.data.frame(Full_Data)
+
 variance <- Full_Data[, c(1,13,15)]
 
 print(variance[order(variance[,2], decreasing = T),  ])
@@ -408,11 +410,14 @@ Here's the CNBC Definitions:
 
 ## Overall Rank
 
+
 ```{r, anlysis}
 
-cost_exploration <- readr::read_csv("https://raw.githubusercontent.com/spurnell/AHR_Density_Report/main/Cost%20of%20doing%20business%20-%20Full%20Data.csv")
+cost_exploration <- readr::read_csv("https://raw.githubusercontent.com/spurnell/AHR_Density_Report/main/Cost%20of%20doing%20business%20-%20Full%20Data.csv", name_repair = "unique")
 
-cost_exploration <- as.data.frame(cost_exploration)
+cost_exploration <- as.data.frame(lapply(cost_exploration, function(y) gsub(",", "", y)))
+
+cost_exploration[,2:43] <- as.numeric(unlist(cost_exploration[,2:43]))
 
 linear_model <- with(cost_exploration, lm(Overall.Rank ~ EDUCATION +
                                                           WORKFORCE +
@@ -481,7 +486,9 @@ summary(linear_model5)
 ## Cost of Living vs Tax Burden 
 
 ```{r, warning=F}
-cost_of_living <- readr::read_csv("https://raw.githubusercontent.com/spurnell/AHR_Density_Report/main/Cost%20of%20doing%20business%20-%20Full%20Data.csv")
+cost_of_living <- readr::read_csv("https://raw.githubusercontent.com/spurnell/AHR_Density_Report/main/advisorsmith_cost_of_living_index%20-%20advisorsmith_cost_of_living_index.csv")
+
+cost_of_living <- as.data.frame(lapply(cost_of_living, function(y) gsub(",", "", y)))
 
 cost_of_living <- cost_of_living %>% 
   filter(!State == "DC")
@@ -512,7 +519,7 @@ fig
 
 
 fig2 <- plotly::plot_ly(Full_Data_smithadv, 
-                       x=~Urbanization, y =~Finance.Score,
+                       x=~Urbanization, y =~`Finance Score`,
                        mode = 'text',
                        text = ~Full_Data_smithadv$State)
 
